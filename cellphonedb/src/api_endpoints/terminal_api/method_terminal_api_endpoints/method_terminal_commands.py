@@ -87,36 +87,37 @@ def common_options(f: Callable) -> Callable:
     return f
 
 
-@click.command()
-@common_options
-@click.option('--debug-seed', default='-1', type=int, help='Debug random seed 0 for disable it. >=0 to set it [-1]')
-@click.option('--pvalue', default=0.05, type=float, help='Pvalue threshold [0.05]')
-@click.option('--pvalues-result-name', default='pvalues', type=str, help='Pvalues result namefile [pvalues]')
-@click.option('--iterations', default=1000, type=int, help='Number of pvalues analysis iterations [1000]')
-@click.option('--threads', default=4, type=int, help='Max of threads to process the data [4]')
+# @click.command()
+# @common_options
+# @click.option('--debug-seed', default='-1', type=int, help='Debug random seed 0 for disable it. >=0 to set it [-1]')
+# @click.option('--pvalue', default=0.05, type=float, help='Pvalue threshold [0.05]')
+# @click.option('--pvalues-result-name', default='pvalues', type=str, help='Pvalues result namefile [pvalues]')
+# @click.option('--iterations', default=1000, type=int, help='Number of pvalues analysis iterations [1000]')
+# @click.option('--threads', default=4, type=int, help='Max of threads to process the data [4]')
 def statistical_analysis(meta_filename: str,
                          counts_filename: str,
-                         counts_data: str,
-                         project_name: str,
-                         threshold: float,
-                         result_precision: int,
-                         output_path: str,
-                         output_format: str,
-                         means_result_name: str,
-                         significant_means_result_name: str,
-                         deconvoluted_result_name: str,
-                         verbose: bool,
-                         database: Optional[str],
-                         subsampling: bool,
-                         subsampling_log: bool,
-                         subsampling_num_pc: int,
-                         subsampling_num_cells: Optional[int],
-                         debug_seed: int,
-                         pvalue: float,
-                         pvalues_result_name: str,
-                         iterations: int,
-                         threads: int
+                         counts_data='ensembl',
+                         project_name='',
+                         threshold=0.1,
+                         result_precision='3',
+                         output_path='',
+                         output_format='csv',
+                         means_result_name='means',
+                         significant_means_result_name='significant_means',
+                         deconvoluted_result_name='deconvoluted',
+                         verbose=True,
+                         database='latest',
+                         subsampling=False,
+                         subsampling_log=True,
+                         subsampling_num_pc=100,
+                         subsampling_num_cells=None,
+                         debug_seed='-1',
+                         pvalue=0.05,
+                         pvalues_result_name='pvalues',
+                         iterations=1000,
+                         threads=4
                          ) -> None:
+    database = choose_database(None, None, value=database)
     try:
 
         subsampler = Subsampler(subsampling_log,
@@ -165,25 +166,26 @@ def statistical_analysis(meta_filename: str,
             traceback.print_exc(file=sys.stdout)
 
 
-@click.command()
-@common_options
-def analysis(meta_filename: str,
-             counts_filename: str,
-             counts_data: str,
-             project_name: str,
-             threshold: float,
-             result_precision: int,
-             output_path: str,
-             output_format: str,
-             means_result_name: str,
-             significant_means_result_name: str,
-             deconvoluted_result_name: str,
-             verbose: bool,
-             database: Optional[str],
-             subsampling: bool,
-             subsampling_log: bool,
-             subsampling_num_pc: int,
-             subsampling_num_cells: Optional[int]
+# @click.command()
+# @common_options
+def analysis(
+            meta_filename: str,
+            counts_filename: str,
+            counts_data='ensembl',
+            project_name='',
+            threshold=0.1,
+            result_precision='3',
+            output_path='',
+            output_format='csv',
+            means_result_name='means',
+            significant_means_result_name='significant_means',
+            deconvoluted_result_name='deconvoluted',
+            verbose=True,
+            database='latest',
+            subsampling=False,
+            subsampling_log=True,
+            subsampling_num_pc=100,
+            subsampling_num_cells=None,
              ):
     try:
 
@@ -206,6 +208,165 @@ def analysis(meta_filename: str,
                                                                                                result_precision,
                                                                                                subsampler,
                                                                                                )
+    except (ReadFileException, ParseMetaException, ParseCountsException, ThresholdValueException,
+            AllCountsFilteredException) as e:
+        app_logger.error(str(e) +
+                         (':' if (hasattr(e, 'description') and e.description) or (
+                                 hasattr(e, 'hint') and e.hint) else '') +
+                         (' {}.'.format(e.description) if hasattr(e, 'description') and e.description else '') +
+                         (' {}.'.format(e.hint) if hasattr(e, 'hint') and e.hint else '')
+                         )
+
+    except EmptyResultException as e:
+        app_logger.warning(str(e) +
+                           (':' if (hasattr(e, 'description') and e.description) or (
+                                   hasattr(e, 'hint') and e.hint) else '') +
+                           (' {}.'.format(e.description) if hasattr(e, 'description') and e.description else '') +
+                           (' {}.'.format(e.hint) if hasattr(e, 'hint') and e.hint else '')
+                           )
+    except:
+        app_logger.error('Unexpected error')
+
+        if verbose:
+            traceback.print_exc(file=sys.stdout)
+
+
+#  SCANPY API
+def statistical_analysis_scanpy(
+                         adata,
+                         var_names,
+                         obs_names,
+                         obs_key,
+                         var_key=None,
+                         gene_id_format=None,
+                         project_name='',
+                         threshold=0.1,
+                         result_precision='3',
+                         output_path='',
+                         output_format='csv',
+                         means_result_name='means',
+                         significant_means_result_name='significant_means',
+                         deconvoluted_result_name='deconvoluted',
+                         verbose=True,
+                         database='latest',
+                         subsampling=False,
+                         subsampling_log=True,
+                         subsampling_num_pc=100,
+                         subsampling_num_cells=None,
+                         debug_seed='-1',
+                         pvalue=0.05,
+                         pvalues_result_name='pvalues',
+                         iterations=1000,
+                         threads=4,
+                         write=False,
+                         add_to_uns=True
+                         ):
+    database = choose_database(None, None, value=database)
+    try:
+
+        subsampler = Subsampler(subsampling_log,
+                                subsampling_num_pc,
+                                subsampling_num_cells,
+                                verbose) if subsampling else None
+
+        outs=LocalMethodLauncher(cpdb_app.create_app(verbose, database)). \
+            cpdb_statistical_analysis_local_method_launcher_scanpy(adata,
+                                                            var_names,
+                                                            obs_names,
+                                                            obs_key,
+                                                            var_key,
+                                                            gene_id_format,
+                                                            project_name,
+                                                            iterations,
+                                                            threshold,
+                                                            output_path,
+                                                            output_format,
+                                                            means_result_name,
+                                                            pvalues_result_name,
+                                                            significant_means_result_name,
+                                                            deconvoluted_result_name,
+                                                            debug_seed,
+                                                            threads,
+                                                            result_precision,
+                                                            pvalue,
+                                                            subsampler,
+                                                            write,
+                                                            add_to_uns
+                                                            )
+        return outs
+    except (ReadFileException, ParseMetaException, ParseCountsException, ThresholdValueException,
+            AllCountsFilteredException) as e:
+        app_logger.error(str(e) +
+                         (':' if (hasattr(e, 'description') and e.description) or (
+                                 hasattr(e, 'hint') and e.hint) else '') +
+                         (' {}.'.format(e.description) if hasattr(e, 'description') and e.description else '') +
+                         (' {}.'.format(e.hint) if hasattr(e, 'hint') and e.hint else '')
+                         )
+
+    except EmptyResultException as e:
+        app_logger.warning(str(e) +
+                           (':' if (hasattr(e, 'description') and e.description) or (
+                                   hasattr(e, 'hint') and e.hint) else '') +
+                           (' {}.'.format(e.description) if hasattr(e, 'description') and e.description else '') +
+                           (' {}.'.format(e.hint) if hasattr(e, 'hint') and e.hint else '')
+                           )
+    except:
+        app_logger.error('Unexpected error')
+        if verbose:
+            traceback.print_exc(file=sys.stdout)
+
+
+def analysis_scanpy(
+            adata,
+            var_names,
+            obs_names,
+            obs_key,
+            var_key=None,
+            gene_id_format=None,
+            project_name='',
+            threshold=0.1,
+            result_precision='3',
+            output_path='',
+            output_format='csv',
+            means_result_name='means',
+            significant_means_result_name='significant_means',
+            deconvoluted_result_name='deconvoluted',
+            verbose=True,
+            database='latest',
+            subsampling=False,
+            subsampling_log=True,
+            subsampling_num_pc=100,
+            subsampling_num_cells=None,
+            write=False,
+            add_to_uns=True
+             ):
+    try:
+
+        subsampler = Subsampler(subsampling_log,
+                                subsampling_num_pc,
+                                subsampling_num_cells,
+                                verbose) if subsampling else None
+
+        out=LocalMethodLauncher(cpdb_app.create_app(verbose,
+                                                database)).cpdb_analysis_local_method_launcher_scanpy(adata,
+                                                                                               var_names,
+                                                                                               obs_names,
+                                                                                               obs_key,
+                                                                                               var_key,
+                                                                                               gene_id_format,
+                                                                                               project_name,
+                                                                                               threshold,
+                                                                                               output_path,
+                                                                                               output_format,
+                                                                                               means_result_name,
+                                                                                               significant_means_result_name,
+                                                                                               deconvoluted_result_name,
+                                                                                               result_precision,
+                                                                                               subsampler,
+                                                                                               write,
+                                                                                               add_to_uns
+                                                                                               )
+        return out
     except (ReadFileException, ParseMetaException, ParseCountsException, ThresholdValueException,
             AllCountsFilteredException) as e:
         app_logger.error(str(e) +
